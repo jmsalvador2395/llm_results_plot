@@ -3,9 +3,11 @@
 import datasets
 import matplotlib.pyplot as plt
 import seaborn as sns
+import seaborn.objects as so
 import pandas as pd
 import numpy as np
 from datasets import Dataset
+
 
 # TODO delete these
 from pprint import pprint
@@ -21,7 +23,8 @@ if __name__ == '__main__':
     metrics = sorted({key for key, val in ds.features.items() if val.dtype == 'float64'})
 
     # convert to list split data into its respective datasets
-    ds_list = ds.to_list() ds_dict = {name: list(filter(lambda x: x['Dataset'] == name, ds_list)) for name in ds_names}
+    ds_list = ds.to_list() 
+    ds_dict = {name: list(filter(lambda x: x['Dataset'] == name, ds_list)) for name in ds_names}
 
     ###############################################
     # get max scores over prompt levels per model #
@@ -47,18 +50,23 @@ if __name__ == '__main__':
 
             
     # plot data
-    fig, axes = plt.subplots(2, 1)
+    fig, ax = plt.subplots(2, 1, sharex=True)
     dataframes = {name: pd.DataFrame(max_per_model_data[name]) for name in ds_names}
 
     for i, (name, df) in enumerate(dataframes.items()):
+        legend = True if i==0 else False
         sns.barplot(x='Model',
                     y='Score',
                     hue='Metric',
                     data=df,
-                    ax=axes[i],
-                    palette='Blues',)
+                    ax=ax[i],
+                    legend=legend,
+                    palette='Blues')
+        ax[i].set_title(name_map[name])
+        ax[i].tick_params(axis='x', labelrotation=20)
+
     plt.show()
-    breakpoint()
+    #breakpoint()
 
 
 
