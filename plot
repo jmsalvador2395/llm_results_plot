@@ -11,23 +11,58 @@ from datasets import Dataset
 from pprint import pprint
 
 if __name__ == '__main__':
+    # read dataset
     ds = Dataset.from_csv('results.csv')
 
-    fnames = ds['Model']
-    new_ds = []
-    for fname in fnames:
-        fsplit = fname.split('/')[1:]
-        level = fsplit.pop(-1)
-        level = level.replace('level', '').replace('.json', '')
-        new_ds.append({
-            'Dataset': fsplit.pop(0),
-            'level': int(level),
-            'model': '/'.join(fsplit),
-        })
-    new_ds = Dataset.from_list(new_ds)
-    ds = datasets.concatenate_datasets([new_ds, ds], axis=1)
-    ds = ds.remove_columns('Model')
+    # collect sets
+    models = set(ds['Model'])
+    ds_names = set(ds['Dataset'])
+    name_map = {name: name.replace('_', ' ').title() for name in ds_names}
+    metrics = sorted({key for key, val in ds.features.items() if val.dtype == 'float64'})
 
+    # convert to list split data into its respective datasets
+    ds_list = ds.to_list() ds_dict = {name: list(filter(lambda x: x['Dataset'] == name, ds_list)) for name in ds_names}
+
+    ###############################################
+    # get max scores over prompt levels per model #
+    ###############################################
+    max_per_model_data = {name: [] for name in ds_names}
+    max_per_model_idxs = {name: [] for name in ds_names}
+
+    for name, data in ds_dict.items():
+        for model in sorted(models):
+            model_data = list(filter(lambda x: x['Model'] == model, data))
+            model_ds = Dataset.from_list(model_data)
+
+            #dict_head = {'Model': model, 'Dataset': name}
+            dict_head = {'Model': model}
+            maxes = {metric: max(model_ds[metric]) for metric in metrics}
+            max_indices = {metric: np.argmax(model_ds[metric]) for metric in metrics}
+
+            new_samples = [{'Model': model, 'Score': maxes[metric], 'Metric': metric} for metric in metrics]
+            max_per_model_data[name] += new_samples
+
+            #max_per_model_data[name].append({**dict_head, **maxes})
+            max_per_model_idxs[name].append({**dict_head, **max_indices})
+
+            
+    # plot data
+    fig, axes = plt.subplots(2, 1)
+    dataframes = {name: pd.DataFrame(max_per_model_data[name]) for name in ds_names}
+
+    for i, (name, df) in enumerate(dataframes.items()):
+        sns.barplot(x='Model',
+                    y='Score',
+                    hue='Metric',
+                    data=df,
+                    ax=axes[i],
+                    palette='Blues',)
+    plt.show()
+    breakpoint()
+
+
+
+    """
     #for model in set(ds['model']):
     for lv in set(ds['level']):
         lv_ds = Dataset.from_list(list(
@@ -37,3 +72,4 @@ if __name__ == '__main__':
 
     df = ds.to_pandas()
     breakpoint()
+    """
