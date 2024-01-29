@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import os
 import datasets
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -7,6 +8,7 @@ import seaborn.objects as so
 import pandas as pd
 import numpy as np
 from datasets import Dataset
+from scipy.stats import spearmanr
 
 
 # TODO delete these
@@ -26,11 +28,37 @@ if __name__ == '__main__':
     ds_list = ds.to_list() 
     ds_dict = {name: list(filter(lambda x: x['Dataset'] == name, ds_list)) for name in ds_names}
 
+    trgt = 'figs'
+    if not os.path.exists(trgt):
+        os.mkdir(trgt)
+
+    # build correlation table
+    cor_mat = np.zeros((len(metrics), len(metrics)))
+    out_table =  '| | ' + ' | '.join(metrics) + ' |\n'
+    out_table += '| - '*(out_table.count('|')-1) + '|\n'
+
+    for i, m1 in enumerate(metrics):
+        row = f'| {metrics[i]} |'
+        for j, m2 in enumerate(metrics):
+            score = spearmanr(ds[m1], ds[m2]).statistic
+            cor_mat[i, j] = score
+            if j >= i:
+                row += f' - |'
+            else:
+                row += f' {score:.2f} |'
+        out_table += row + '\n'
+    with open(trgt + '/correlation_table.md', 'w') as f:
+        f.write(out_table)
+
+    cor_mat = np.tril(cor_mat)
+    np.fill_diagonal(cor_mat, 0)
+
     ###############################################
     # get max scores over prompt levels per model #
     ###############################################
     max_per_model_data = {name: [] for name in ds_names}
     max_per_model_idxs = {name: [] for name in ds_names}
+    counts_per_lvl = {lv: 0 for lv in set(ds['Level'])}
 
     for name, data in ds_dict.items():
         for model in sorted(models):
@@ -46,7 +74,10 @@ if __name__ == '__main__':
             max_per_model_data[name] += new_samples
 
             #max_per_model_data[name].append({**dict_head, **maxes})
+            # update level counts
             max_per_model_idxs[name].append({**dict_head, **max_indices})
+            for metric in metrics:
+                counts_per_lvl[max_per_model_idxs[name][-1][metric]] += 1
 
             
     # plot data
@@ -66,18 +97,13 @@ if __name__ == '__main__':
         ax[i].tick_params(axis='x', labelrotation=20)
 
     plt.show()
-    #breakpoint()
 
+    # compute count of max scores per level
+    fig, ax = plt.subplots()
+    ax.set_title(r'# Times Each TeLER Level Scored Highest')
 
-
-    """
-    #for model in set(ds['model']):
-    for lv in set(ds['level']):
-        lv_ds = Dataset.from_list(list(
-            filter(lambda x: x['level'] == lv, ds)
-        ))
-        breakpoint()
-
-    df = ds.to_pandas()
-    breakpoint()
-    """
+    x = np.array(list(counts_per_lvl.keys()))
+    x = [f'Lv{lv}' for lv in x]
+    y = np.array(list(counts_per_lvl.values()))
+    sns.barplot(x=x, y=y)
+    plt.show()
