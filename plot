@@ -79,6 +79,17 @@ if __name__ == '__main__':
             for metric in metrics:
                 counts_per_lvl[max_per_model_idxs[name][-1][metric]] += 1
 
+    color_palette = {
+        'BERTscore': 'yellow',
+        'Rouge-1': 'aquamarine',
+        'Rouge-2': 'turquoise',
+        'Rouge-L': 'darkturquoise',
+        'Rouge-L Sum': 'lightseagreen',
+        'Sem-F1 (Distil)': 'thistle',
+        'Sem-F1 (RoBERTa)': 'plum',
+        'Sem-F1 (USE)': 'violet',
+    }
+
             
     # plot data
     fig, ax = plt.subplots(2, 1, sharex=True)
@@ -92,7 +103,8 @@ if __name__ == '__main__':
                     data=df,
                     ax=ax[i],
                     legend=legend,
-                    palette='Blues')
+                    #palette='Blues')
+                    palette=color_palette)
         ax[i].set_title(name_map[name])
         ax[i].tick_params(axis='x', labelrotation=20)
 

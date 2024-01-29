@@ -3,3 +3,4 @@ numpy
 matplotlib
 datasets
 pandas
+scipy
