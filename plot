@@ -7,14 +7,17 @@ import seaborn as sns
 import seaborn.objects as so
 import pandas as pd
 import numpy as np
+from  matplotlib.colors import LinearSegmentedColormap
 from datasets import Dataset
 from scipy.stats import spearmanr
+
 
 
 # TODO delete these
 from pprint import pprint
 
 if __name__ == '__main__':
+
     # read dataset
     ds = Dataset.from_csv('results.csv')
 
@@ -32,30 +35,74 @@ if __name__ == '__main__':
     if not os.path.exists(trgt):
         os.mkdir(trgt)
 
-    # build correlation table
+    """
+    def avg(ds_list, ds_name, metrics, levels):
+        #print(f'{metrics[-3]}\t\t{metrics[-2]}\t{metrics[-1]}')
+        for lv in levels:
+            ds = Dataset.from_list(list(filter(lambda x: x['Dataset'] == ds_name and x['Level'] == lv, ds_list)))
+            print(ds[metrics[-3]])
+            #print(f'{np.mean(ds[metrics[-3]]):.3f}\t\t\t{np.mean(ds[metrics[-2]]):.3f}\t{np.mean(ds[metrics[-1]]):.3f}')
+    avg(ds_list, 'privacy_policy', metrics, set(ds['Level']))
+    breakpoint()
+    """
+
+    ##################################
+    # average score per prompt group #
+    ##################################
+    lvs = sorted(set(ds['Level']))
+    avg_scores = []
+    for name in ds_names:
+        for lv in lvs:
+            lv_ds = Dataset.from_list(list(filter(
+                lambda x: x['Level'] == lv and x['Dataset'] == name,
+                ds_list
+            )))
+            scores = {'Dataset': name, 'Level': lv}
+            scores.update({metric:np.mean(lv_ds[metric]) for metric in metrics})
+            avg_scores.append(scores)
+
+    avg_score_df = pd.DataFrame(avg_scores)
+    with open(trgt + '/avg_scores.tex', 'w') as f:
+        f.write(avg_score_df.to_latex(
+            index=False,
+            float_format='%.3f',
+            column_format='| l | r | r | r | r | r | r | r | r | r |',
+            bold_rows=True,
+        ))
+
+    ###########################
+    # build correlation table #
+    ###########################
+    plt.rcParams.update({'font.size': 20})
+    wh = 10.0, 10.0
+    sns.set(rc={'figure.figsize': wh})
     cor_mat = np.zeros((len(metrics), len(metrics)))
-    out_table =  '| | ' + ' | '.join(metrics) + ' |\n'
-    out_table += '| - '*(out_table.count('|')-1) + '|\n'
 
     for i, m1 in enumerate(metrics):
-        row = f'| {metrics[i]} |'
         for j, m2 in enumerate(metrics):
             score = spearmanr(ds[m1], ds[m2]).statistic
             cor_mat[i, j] = score
-            if j >= i:
-                row += f' - |'
-            else:
-                row += f' {score:.2f} |'
-        out_table += row + '\n'
-    with open(trgt + '/correlation_table.md', 'w') as f:
-        f.write(out_table)
 
-    cor_mat = np.tril(cor_mat)
-    np.fill_diagonal(cor_mat, 0)
+    fig, ax = plt.subplots()
+    sns.heatmap(
+        cor_mat,
+        annot=True,
+        vmin=0,
+        xticklabels=metrics,
+        yticklabels=metrics,
+    )
+    plt.title(r"Spearman Correlation Matrix for Each Metric")
+    ax.tick_params(axis='x', labelrotation=10)
+    ax.tick_params(axis='y', labelrotation=10)
+    plt.savefig(trgt + '/metric_correlation.png')
 
     ###############################################
     # get max scores over prompt levels per model #
     ###############################################
+    #plt.rcParams.update({'font.size': 56})
+    wh = 22.0, 12.0
+    sns.set(rc={'figure.figsize': wh})
+    sns.set(font_scale=1.5)
     max_per_model_data = {name: [] for name in ds_names}
     max_per_model_idxs = {name: [] for name in ds_names}
     counts_per_lvl = {lv: 0 for lv in set(ds['Level'])}
@@ -103,19 +150,34 @@ if __name__ == '__main__':
                     data=df,
                     ax=ax[i],
                     legend=legend,
-                    #palette='Blues')
                     palette=color_palette)
         ax[i].set_title(name_map[name])
-        ax[i].tick_params(axis='x', labelrotation=20)
+        ax[i].tick_params(axis='x', labelrotation=15)
 
+    plt.savefig(
+        trgt + '/max_scores_per_model.png',
+        bbox_inches='tight',
+        pad_inches=0,
+        dpi=400,
+    )
     plt.show()
 
     # compute count of max scores per level
+    wh = 12.0, 12.0
+    sns.set(rc={'figure.figsize': wh})
+    sns.set(font_scale=1.5)
     fig, ax = plt.subplots()
-    ax.set_title(r'# Times Each TeLER Level Scored Highest')
 
     x = np.array(list(counts_per_lvl.keys()))
     x = [f'Lv{lv}' for lv in x]
     y = np.array(list(counts_per_lvl.values()))
-    sns.barplot(x=x, y=y)
+    color_palette = sns.color_palette('dark')
+    plt.pie(y, labels=x, colors=color_palette)
+    ax.set_title(f'Highest Scoring TeLER Prompts For Each Model (n={sum(y)})')
+    plt.savefig(
+        trgt + '/top_prompts_by_lv.png',
+        bbox_inches='tight',
+        pad_inches=0,
+        dpi=400,
+    )
     plt.show()
